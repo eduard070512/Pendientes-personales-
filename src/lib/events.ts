@@ -1,20 +1,21 @@
 import "server-only";
-import { and, eq, gte, lte, notInArray } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, notInArray } from "drizzle-orm";
 import { db } from "@/db";
-import { clients, debts, internshipSteps, internships, jobs, recurring, tasks } from "@/db/schema";
+import { classroomItems, clients, debts, internshipSteps, internships, jobs, recurring, tasks } from "@/db/schema";
 import { monthRange } from "./dates";
 
 export type CalEvent = {
   date: string;
   title: string;
   href: string;
-  kind: "pendiente" | "internship" | "trabajo" | "cliente" | "dinero";
+  kind: "pendiente" | "classroom" | "internship" | "trabajo" | "cliente" | "dinero";
   done?: boolean;
   overdue?: boolean;
 };
 
 export const KIND_STYLE: Record<CalEvent["kind"], { label: string; chip: string; dot: string }> = {
   pendiente: { label: "Pendiente", chip: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300", dot: "bg-indigo-500" },
+  classroom: { label: "Classroom", chip: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300", dot: "bg-rose-500" },
   internship: { label: "Internship", chip: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300", dot: "bg-violet-500" },
   trabajo: { label: "Trabajo", chip: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300", dot: "bg-sky-500" },
   cliente: { label: "Cliente", chip: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300", dot: "bg-emerald-500" },
@@ -23,7 +24,7 @@ export const KIND_STYLE: Record<CalEvent["kind"], { label: string; chip: string;
 
 /** Todo lo que tiene fecha entre `start` y `end` (inclusive). */
 export async function eventsBetween(start: string, end: string, opts: { includeMoney?: boolean } = {}) {
-  const [t, i, s, j, c] = await Promise.all([
+  const [t, i, s, j, c, cr] = await Promise.all([
     db.select().from(tasks).where(and(gte(tasks.dueDate, start), lte(tasks.dueDate, end))),
     db
       .select()
@@ -36,6 +37,10 @@ export async function eventsBetween(start: string, end: string, opts: { includeM
       .where(and(gte(internshipSteps.dueDate, start), lte(internshipSteps.dueDate, end))),
     db.select().from(jobs).where(and(gte(jobs.nextFollowUp, start), lte(jobs.nextFollowUp, end), notInArray(jobs.status, ["rechazado", "oferta"]))),
     db.select().from(clients).where(and(gte(clients.nextFollowUp, start), lte(clients.nextFollowUp, end), notInArray(clients.stage, ["perdido"]))),
+    db
+      .select()
+      .from(classroomItems)
+      .where(and(gte(classroomItems.dueDate, start), lte(classroomItems.dueDate, end), eq(classroomItems.hidden, false), isNull(classroomItems.taskId))),
   ]);
 
   const ev: CalEvent[] = [
@@ -45,6 +50,13 @@ export async function eventsBetween(start: string, end: string, opts: { includeM
       .filter((x) => !["rechazado", "descartado"].includes(x.status))
       .map((x) => ({ date: x.step.dueDate!, title: `${x.company}: ${x.step.title}`, href: `/internships/${x.step.internshipId}`, kind: "internship" as const, done: x.step.done })),
     ...j.map((x) => ({ date: x.nextFollowUp!, title: `Seguimiento: ${x.company}${x.position ? ` (${x.position})` : ""}`, href: `/trabajos/${x.id}`, kind: "trabajo" as const })),
+    ...cr.map((x) => ({
+      date: x.dueDate!,
+      title: `${x.courseName ? `${x.courseName}: ` : ""}${x.title}${x.dueTime ? ` (${x.dueTime})` : ""}`,
+      href: `/classroom?ver=todas`,
+      kind: "classroom" as const,
+      done: x.state !== "pendiente",
+    })),
     ...c.map((x) => ({ date: x.nextFollowUp!, title: `Seguimiento: ${x.business || x.name}`, href: `/clientes/${x.id}`, kind: "cliente" as const })),
   ];
 

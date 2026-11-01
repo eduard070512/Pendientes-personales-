@@ -7,6 +7,7 @@ export const NAV = [
   { href: "/", label: "Inicio", icon: "🏠" },
   { href: "/pendientes", label: "Pendientes", icon: "✅" },
   { href: "/calendario", label: "Calendario", icon: "📅" },
+  { href: "/classroom", label: "Classroom", icon: "📚" },
   { href: "/internships", label: "Internships", icon: "🎓" },
   { href: "/trabajos", label: "Trabajos", icon: "💼" },
   { href: "/clientes", label: "Clientes", icon: "🤝" },

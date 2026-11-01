@@ -1,0 +1,60 @@
+{
+  "name": "Pendientes · Classroom",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyHour" }] },
+        "simple": false,
+        "filters": { "q": "from:no-reply@classroom.google.com" },
+        "options": {}
+      },
+      "name": "Correo de Classroom",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://TU-APP.vercel.app/api/ingest/classroom-email",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer TU_CRON_SECRET" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ subject: $json.subject, from: $json.from?.text ?? $json.from, text: $json.text, html: $json.html, date: $json.date }) }}",
+        "options": {}
+      },
+      "name": "Mandar a la app",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 2 }] }
+      },
+      "name": "Cada 2 horas",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 220]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://TU-APP.vercel.app/api/cron/classroom",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer TU_CRON_SECRET" }] },
+        "options": {}
+      },
+      "name": "Sincronizar API de Classroom",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 220]
+    }
+  ],
+  "connections": {
+    "Correo de Classroom": { "main": [[{ "node": "Mandar a la app", "type": "main", "index": 0 }]] },
+    "Cada 2 horas": { "main": [[{ "node": "Sincronizar API de Classroom", "type": "main", "index": 0 }]] }
+  },
+  "settings": {}
+}

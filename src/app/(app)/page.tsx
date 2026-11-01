@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { and, lte, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { tasks } from "@/db/schema";
+import { classroomItems, tasks } from "@/db/schema";
 import { ResetOnSubmitForm, SubmitButton } from "@/components/client";
 import { TaskRow } from "@/components/task-row";
 import { Stat } from "@/components/ui";
@@ -14,7 +14,7 @@ import { createTask } from "./pendientes/actions";
 
 export default async function Home() {
   const today = todayISO();
-  const [urgent, noDate, upcoming, fin] = await Promise.all([
+  const [urgent, noDate, upcoming, fin, school] = await Promise.all([
     db
       .select()
       .from(tasks)
@@ -28,6 +28,18 @@ export default async function Home() {
       .limit(5),
     eventsBetween(addDays(today, 1), addDays(today, 14)),
     monthSummary(monthKey(today)),
+    db
+      .select()
+      .from(classroomItems)
+      .where(
+        and(
+          eq(classroomItems.state, "pendiente"),
+          eq(classroomItems.hidden, false),
+          isNull(classroomItems.taskId),
+          lte(classroomItems.dueDate, addDays(today, 1)),
+        ),
+      )
+      .orderBy(classroomItems.dueDate),
   ]);
   const upcomingOpen = upcoming.filter((e) => !e.done);
 
@@ -54,7 +66,7 @@ export default async function Home() {
               Todos →
             </Link>
           </div>
-          {urgent.length === 0 ? (
+          {urgent.length === 0 && school.length === 0 ? (
             <p className="muted py-3 text-sm">¡Al día! 🎉</p>
           ) : (
             <ul>
@@ -62,6 +74,27 @@ export default async function Home() {
                 <TaskRow key={t.id} t={t} />
               ))}
             </ul>
+          )}
+          {school.length > 0 && (
+            <>
+              <div className="mt-3 text-xs font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400">Classroom: hoy, mañana o atrasadas</div>
+              <ul className="space-y-1.5 py-2">
+                {school.map((c) => (
+                  <li key={c.id}>
+                    <Link href="/classroom" className="flex items-start gap-2 text-sm hover:underline">
+                      <span aria-hidden>📚</span>
+                      <span className="min-w-0 flex-1">
+                        {c.title} <span className="muted text-xs">· {c.courseName}</span>
+                      </span>
+                      <span className={`shrink-0 text-xs ${c.dueDate! < today ? "text-red-600 dark:text-red-400" : "muted"}`}>
+                        {relDay(c.dueDate)}
+                        {c.dueTime ? ` ${c.dueTime}` : ""}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
           {noDate.length > 0 && (
             <>

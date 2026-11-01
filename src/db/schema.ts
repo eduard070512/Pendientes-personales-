@@ -199,3 +199,38 @@ export const debtPayments = pgTable("debt_payments", {
   transactionId: integer("transaction_id").references(() => transactions.id, { onDelete: "set null" }),
   createdAt: createdAt(),
 });
+
+/* ───────────── Classroom ───────────── */
+
+export const classroomItems = pgTable(
+  "classroom_items",
+  {
+    id: serial("id").primaryKey(),
+    externalId: text("external_id").notNull(), // id del courseWork en Classroom
+    courseId: text("course_id").notNull().default(""),
+    courseName: text("course_name").notNull().default(""),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    link: text("link").notNull().default(""),
+    dueDate: day("due_date"), // en hora de México
+    dueTime: text("due_time"), // HH:MM en hora de México
+    state: text("state").notNull().default("pendiente"), // pendiente | entregada | devuelta
+    late: boolean("late").notNull().default(false),
+    maxPoints: numeric("max_points", { precision: 8, scale: 2 }),
+    grade: numeric("grade", { precision: 8, scale: 2 }),
+    workType: text("work_type").notNull().default(""),
+    source: text("source").notNull().default("api"), // api | email
+    taskId: integer("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("classroom_items_external_idx").on(t.externalId), index("classroom_items_due_idx").on(t.dueDate)],
+);
+
+/** Ajustes clave-valor (tokens de Google, última sincronización…). */
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: updatedAt(),
+});
