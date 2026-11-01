@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { jobs } from "@/db/schema";
 import { SubmitButton } from "@/components/client";
 import { JobFields } from "@/components/job-fields";
 import { Badge, Empty, PageHeader, Tabs } from "@/components/ui";
+import { requireUid } from "@/lib/auth";
 import { JOB_STATUS, opt } from "@/lib/constants";
 import { daysUntil, fmtDate, relDay } from "@/lib/dates";
 import { createJob } from "./actions";
@@ -13,13 +14,14 @@ import { createJob } from "./actions";
 export const metadata: Metadata = { title: "Trabajos" };
 
 export default async function JobsPage({ searchParams }: { searchParams: Promise<{ estado?: string }> }) {
+  const uid = await requireUid();
   const { estado = "todos" } = await searchParams;
-  const counts = await db.select({ status: jobs.status, n: sql<number>`count(*)` }).from(jobs).groupBy(jobs.status);
+  const counts = await db.select({ status: jobs.status, n: sql<number>`count(*)` }).from(jobs).where(eq(jobs.userId, uid)).groupBy(jobs.status);
   const total = counts.reduce((a, c) => a + Number(c.n), 0);
   const list = await db
     .select()
     .from(jobs)
-    .where(estado === "todos" ? undefined : eq(jobs.status, estado))
+    .where(and(eq(jobs.userId, uid), estado === "todos" ? undefined : eq(jobs.status, estado)))
     .orderBy(sql`${jobs.nextFollowUp} asc nulls last`, desc(jobs.updatedAt));
 
   return (

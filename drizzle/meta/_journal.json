@@ -15,6 +15,13 @@
       "when": 1793497530271,
       "tag": "0001_classroom",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793563420211,
+      "tag": "0002_multiuser",
+      "breakpoints": true
     }
   ]
 }

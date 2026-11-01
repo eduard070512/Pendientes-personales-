@@ -13,13 +13,14 @@ export const NAV = [
   { href: "/trabajos", label: "Trabajos", icon: "💼" },
   { href: "/clientes", label: "Clientes", icon: "🤝" },
   { href: "/finanzas", label: "Finanzas", icon: "💰" },
+  { href: "/cuenta", label: "Mi cuenta", icon: "👤" },
 ];
 
 function isActive(path: string, href: string) {
   return href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
 }
 
-export function Sidebar({ logout }: { logout: () => Promise<void> }) {
+export function Sidebar({ logout, user }: { logout: () => Promise<void>; user: { name: string; email: string } }) {
   const path = usePathname();
   return (
     <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r border-zinc-200 bg-white p-3 md:flex dark:border-zinc-800 dark:bg-zinc-900">
@@ -41,6 +42,10 @@ export function Sidebar({ logout }: { logout: () => Promise<void> }) {
         ))}
       </nav>
       <div className="space-y-2">
+        <div className="truncate px-2 text-xs">
+          <div className="truncate font-medium">{user.name}</div>
+          <div className="muted truncate">{user.email}</div>
+        </div>
         <InstallButton className="btn-primary w-full" />
         <form action={logout}>
           <button className="btn-secondary w-full">Cerrar sesión</button>

@@ -1,22 +1,22 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { settings } from "@/db/schema";
 
-export async function getSetting(key: string) {
-  const [row] = await db.select().from(settings).where(eq(settings.key, key));
+export async function getSetting(userId: number, key: string) {
+  const [row] = await db.select().from(settings).where(and(eq(settings.userId, userId), eq(settings.key, key)));
   return row?.value ?? null;
 }
 
-export async function setSetting(key: string, value: string) {
+export async function setSetting(userId: number, key: string, value: string) {
   await db
     .insert(settings)
-    .values({ key, value })
-    .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } });
+    .values({ userId, key, value })
+    .onConflictDoUpdate({ target: [settings.userId, settings.key], set: { value, updatedAt: new Date() } });
 }
 
-export async function deleteSetting(key: string) {
-  await db.delete(settings).where(eq(settings.key, key));
+export async function deleteSetting(userId: number, key: string) {
+  await db.delete(settings).where(and(eq(settings.userId, userId), eq(settings.key, key)));
 }
 
 /* Cifrado AES-GCM para guardar tokens en la base (llave derivada de SESSION_SECRET). */

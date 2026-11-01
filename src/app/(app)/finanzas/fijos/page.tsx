@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { asc, desc } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { recurring } from "@/db/schema";
 import { ConfirmButton, ResetOnSubmitForm, SubmitButton } from "@/components/client";
@@ -9,6 +9,7 @@ import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/lib/constants";
 import { monthKey, monthLabel, todayISO } from "@/lib/dates";
 import { pendingRecurring } from "@/lib/finance";
 import { money } from "@/lib/format";
+import { requireUid } from "@/lib/auth";
 import { applyRecurring, createRecurring, deleteRecurring, updateRecurring } from "../actions";
 
 export const metadata: Metadata = { title: "Fijos" };
@@ -51,9 +52,10 @@ function RecFields({ r }: { r?: R }) {
 }
 
 export default async function RecurringPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
+  const uid = await requireUid();
   const ym = parseMonth((await searchParams).mes, monthKey(todayISO()));
-  const items = await db.select().from(recurring).orderBy(desc(recurring.active), asc(recurring.type), asc(recurring.dayOfMonth));
-  const pending = await pendingRecurring(ym);
+  const items = await db.select().from(recurring).where(eq(recurring.userId, uid)).orderBy(desc(recurring.active), asc(recurring.type), asc(recurring.dayOfMonth));
+  const pending = await pendingRecurring(uid, ym);
   const active = items.filter((i) => i.active);
   const inc = active.filter((i) => i.type === "ingreso").reduce((a, i) => a + Number(i.amount), 0);
   const exp = active.filter((i) => i.type === "gasto").reduce((a, i) => a + Number(i.amount), 0);

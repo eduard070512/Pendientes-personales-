@@ -5,6 +5,7 @@ import {
   integer,
   numeric,
   pgTable,
+  primaryKey,
   serial,
   text,
   timestamp,
@@ -16,12 +17,42 @@ const updatedAt = () => timestamp("updated_at", { withTimezone: true }).defaultN
 const day = (name: string) => date(name, { mode: "string" });
 const money = (name: string) => numeric(name, { precision: 12, scale: 2 });
 
+/* ───────────── Usuarios ───────────── */
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(), // siempre en minúsculas
+  name: text("name").notNull().default(""),
+  passwordHash: text("password_hash").notNull(),
+  bio: text("bio").notNull().default(""), // contexto que se le pasa a Claude
+  plan: text("plan").notNull().default("free"), // free | pro (para cobrar en el futuro)
+  sessionVersion: integer("session_version").notNull().default(1), // subirlo cierra todas las sesiones
+  apiTokenHash: text("api_token_hash"), // token personal para n8n (se guarda solo el hash)
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const passwordResets = pgTable("password_resets", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+/** Dueño de cada registro. Es opcional solo para poder migrar los datos de antes de las cuentas. */
+const owner = () => integer("user_id").references(() => users.id, { onDelete: "cascade" });
+
 /* ───────────── Pendientes ───────────── */
 
 export const tasks = pgTable(
   "tasks",
   {
     id: serial("id").primaryKey(),
+    userId: owner(),
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
     dueDate: day("due_date"),
@@ -32,11 +63,12 @@ export const tasks = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("tasks_due_idx").on(t.dueDate)],
+  (t) => [index("tasks_due_idx").on(t.dueDate), index("tasks_user_idx").on(t.userId)],
 );
 
 export const taskUpdates = pgTable("task_updates", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   taskId: integer("task_id")
     .notNull()
     .references(() => tasks.id, { onDelete: "cascade" }),
@@ -48,6 +80,7 @@ export const taskUpdates = pgTable("task_updates", {
 
 export const internships = pgTable("internships", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   company: text("company").notNull(),
   program: text("program").notNull().default(""),
   url: text("url").notNull().default(""),
@@ -63,6 +96,7 @@ export const internships = pgTable("internships", {
 
 export const internshipSteps = pgTable("internship_steps", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   internshipId: integer("internship_id")
     .notNull()
     .references(() => internships.id, { onDelete: "cascade" }),
@@ -77,6 +111,7 @@ export const internshipSteps = pgTable("internship_steps", {
 
 export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   company: text("company").notNull(),
   position: text("position").notNull().default(""),
   url: text("url").notNull().default(""),
@@ -95,6 +130,7 @@ export const jobs = pgTable("jobs", {
 
 export const jobEvents = pgTable("job_events", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   jobId: integer("job_id")
     .notNull()
     .references(() => jobs.id, { onDelete: "cascade" }),
@@ -107,6 +143,7 @@ export const jobEvents = pgTable("job_events", {
 
 export const clients = pgTable("clients", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   name: text("name").notNull(),
   business: text("business").notNull().default(""),
   phone: text("phone").notNull().default(""),
@@ -124,6 +161,7 @@ export const clients = pgTable("clients", {
 
 export const clientNotes = pgTable("client_notes", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   clientId: integer("client_id")
     .notNull()
     .references(() => clients.id, { onDelete: "cascade" }),
@@ -136,6 +174,7 @@ export const clientNotes = pgTable("client_notes", {
 
 export const statements = pgTable("statements", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   account: text("account").notNull(),
   periodStart: day("period_start"),
   periodEnd: day("period_end"),
@@ -146,6 +185,7 @@ export const statements = pgTable("statements", {
 
 export const recurring = pgTable("recurring", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   name: text("name").notNull(),
   type: text("type").notNull(), // ingreso | gasto
   amount: money("amount").notNull(),
@@ -160,6 +200,7 @@ export const transactions = pgTable(
   "transactions",
   {
     id: serial("id").primaryKey(),
+    userId: owner(),
     date: day("date").notNull(),
     description: text("description").notNull(),
     amount: money("amount").notNull(), // siempre positivo; el signo lo da `type`
@@ -172,11 +213,12 @@ export const transactions = pgTable(
     hash: text("hash"),
     createdAt: createdAt(),
   },
-  (t) => [index("transactions_date_idx").on(t.date), uniqueIndex("transactions_hash_idx").on(t.hash)],
+  (t) => [index("transactions_date_idx").on(t.userId, t.date), uniqueIndex("transactions_hash_idx").on(t.hash)],
 );
 
 export const debts = pgTable("debts", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   name: text("name").notNull(),
   lender: text("lender").notNull().default(""),
   total: money("total").notNull(),
@@ -190,6 +232,7 @@ export const debts = pgTable("debts", {
 
 export const debtPayments = pgTable("debt_payments", {
   id: serial("id").primaryKey(),
+  userId: owner(),
   debtId: integer("debt_id")
     .notNull()
     .references(() => debts.id, { onDelete: "cascade" }),
@@ -206,6 +249,7 @@ export const classroomItems = pgTable(
   "classroom_items",
   {
     id: serial("id").primaryKey(),
+    userId: owner(),
     externalId: text("external_id").notNull(), // id del courseWork en Classroom
     courseId: text("course_id").notNull().default(""),
     courseName: text("course_name").notNull().default(""),
@@ -225,12 +269,19 @@ export const classroomItems = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex("classroom_items_external_idx").on(t.externalId), index("classroom_items_due_idx").on(t.dueDate)],
+  (t) => [uniqueIndex("classroom_items_external_idx").on(t.userId, t.externalId), index("classroom_items_due_idx").on(t.dueDate)],
 );
 
 /** Ajustes clave-valor (tokens de Google, última sincronización…). */
-export const settings = pgTable("settings", {
-  key: text("key").primaryKey(),
-  value: text("value").notNull(),
-  updatedAt: updatedAt(),
-});
+export const settings = pgTable(
+  "settings",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);

@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { desc, ne } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { statements, transactions } from "@/db/schema";
 import { ConfirmButton } from "@/components/client";
 import { Section } from "@/components/ui";
 import { fmtDate, monthKey, shiftMonth, todayISO } from "@/lib/dates";
 import { distinctAccounts } from "@/lib/finance";
+import { requireUid } from "@/lib/auth";
 import { deleteStatement } from "../actions";
 import { learnKey } from "@/lib/categorize";
 import { Importer } from "./importer";
@@ -14,6 +15,7 @@ import { Importer } from "./importer";
 export const metadata: Metadata = { title: "Importar estado de cuenta" };
 
 export default async function ImportPage() {
+  const uid = await requireUid();
   const today = todayISO();
   // Periodo por defecto: del 23 del mes pasado al 23 de este mes (o del anterior si aún no llega el corte).
   const endMonth = Number(today.slice(8)) >= 23 ? monthKey(today) : shiftMonth(monthKey(today), -1);
@@ -21,12 +23,12 @@ export default async function ImportPage() {
   const defaultStart = `${shiftMonth(endMonth, -1)}-24`;
 
   const [accounts, history, recent] = await Promise.all([
-    distinctAccounts(),
-    db.select().from(statements).orderBy(desc(statements.createdAt)).limit(50),
+    distinctAccounts(uid),
+    db.select().from(statements).where(eq(statements.userId, uid)).orderBy(desc(statements.createdAt)).limit(50),
     db
       .select({ description: transactions.description, category: transactions.category })
       .from(transactions)
-      .where(ne(transactions.category, "Otros"))
+      .where(and(eq(transactions.userId, uid), ne(transactions.category, "Otros")))
       .orderBy(desc(transactions.id))
       .limit(2000),
   ]);

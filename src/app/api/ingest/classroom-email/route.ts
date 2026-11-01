@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { bearerOk } from "@/lib/api-auth";
+import { userFromToken } from "@/lib/api-auth";
 import { upsertFromEmails } from "@/lib/classroom";
 import { parseClassroomEmail, type ClassroomEmail, type EmailItem } from "@/lib/classroom-email";
 
@@ -23,7 +23,8 @@ function normalize(raw: Raw): ClassroomEmail {
 }
 
 export async function POST(req: Request) {
-  if (!bearerOk(req)) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const uid = await userFromToken(req);
+  if (!uid) return NextResponse.json({ error: "No autorizado: usa tu token personal (Mi cuenta → Token para n8n)" }, { status: 401 });
   let body: unknown;
   try {
     body = await req.json();
@@ -39,6 +40,6 @@ export async function POST(req: Request) {
     if (item) items.push(item);
     else ignored.push(email.subject ?? "");
   }
-  const saved = await upsertFromEmails(items);
+  const saved = await upsertFromEmails(uid, items);
   return NextResponse.json({ ok: true, saved, ignored });
 }

@@ -23,24 +23,24 @@ export const KIND_STYLE: Record<CalEvent["kind"], { label: string; chip: string;
 };
 
 /** Todo lo que tiene fecha entre `start` y `end` (inclusive). */
-export async function eventsBetween(start: string, end: string, opts: { includeMoney?: boolean } = {}) {
+export async function eventsBetween(uid: number, start: string, end: string, opts: { includeMoney?: boolean } = {}) {
   const [t, i, s, j, c, cr] = await Promise.all([
-    db.select().from(tasks).where(and(gte(tasks.dueDate, start), lte(tasks.dueDate, end))),
+    db.select().from(tasks).where(and(eq(tasks.userId, uid), gte(tasks.dueDate, start), lte(tasks.dueDate, end))),
     db
       .select()
       .from(internships)
-      .where(and(gte(internships.deadline, start), lte(internships.deadline, end), notInArray(internships.status, ["rechazado", "descartado", "oferta"]))),
+      .where(and(eq(internships.userId, uid), gte(internships.deadline, start), lte(internships.deadline, end), notInArray(internships.status, ["rechazado", "descartado", "oferta"]))),
     db
       .select({ step: internshipSteps, company: internships.company, status: internships.status })
       .from(internshipSteps)
       .innerJoin(internships, eq(internships.id, internshipSteps.internshipId))
-      .where(and(gte(internshipSteps.dueDate, start), lte(internshipSteps.dueDate, end))),
-    db.select().from(jobs).where(and(gte(jobs.nextFollowUp, start), lte(jobs.nextFollowUp, end), notInArray(jobs.status, ["rechazado", "oferta"]))),
-    db.select().from(clients).where(and(gte(clients.nextFollowUp, start), lte(clients.nextFollowUp, end), notInArray(clients.stage, ["perdido"]))),
+      .where(and(eq(internshipSteps.userId, uid), gte(internshipSteps.dueDate, start), lte(internshipSteps.dueDate, end))),
+    db.select().from(jobs).where(and(eq(jobs.userId, uid), gte(jobs.nextFollowUp, start), lte(jobs.nextFollowUp, end), notInArray(jobs.status, ["rechazado", "oferta"]))),
+    db.select().from(clients).where(and(eq(clients.userId, uid), gte(clients.nextFollowUp, start), lte(clients.nextFollowUp, end), notInArray(clients.stage, ["perdido"]))),
     db
       .select()
       .from(classroomItems)
-      .where(and(gte(classroomItems.dueDate, start), lte(classroomItems.dueDate, end), eq(classroomItems.hidden, false), isNull(classroomItems.taskId))),
+      .where(and(eq(classroomItems.userId, uid), gte(classroomItems.dueDate, start), lte(classroomItems.dueDate, end), eq(classroomItems.hidden, false), isNull(classroomItems.taskId))),
   ]);
 
   const ev: CalEvent[] = [
@@ -62,8 +62,8 @@ export async function eventsBetween(start: string, end: string, opts: { includeM
 
   if (opts.includeMoney) {
     const [rec, dbt] = await Promise.all([
-      db.select().from(recurring).where(and(eq(recurring.active, true), eq(recurring.type, "gasto"))),
-      db.select().from(debts).where(eq(debts.closed, false)),
+      db.select().from(recurring).where(and(eq(recurring.userId, uid), eq(recurring.active, true), eq(recurring.type, "gasto"))),
+      db.select().from(debts).where(and(eq(debts.userId, uid), eq(debts.closed, false))),
     ]);
     // Repite cada pago fijo en cada mes del rango.
     for (let m = start.slice(0, 7); m <= end.slice(0, 7); ) {

@@ -18,7 +18,7 @@
         "method": "POST",
         "url": "https://TU-APP.vercel.app/api/ingest/classroom-email",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer TU_CRON_SECRET" }] },
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer TU_TOKEN_PERSONAL" }] },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ subject: $json.subject, from: $json.from?.text ?? $json.from, text: $json.text, html: $json.html, date: $json.date }) }}",
@@ -43,7 +43,7 @@
         "method": "GET",
         "url": "https://TU-APP.vercel.app/api/cron/classroom",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer TU_CRON_SECRET" }] },
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer TU_TOKEN_PERSONAL" }] },
         "options": {}
       },
       "name": "Sincronizar API de Classroom",

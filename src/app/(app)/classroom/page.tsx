@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
-import { asc, desc, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { classroomItems } from "@/db/schema";
 import { ClaudeButton } from "@/components/claude-button";
 import { ConfirmButton, SubmitButton } from "@/components/client";
 import { Badge, Empty, PageHeader, Tabs } from "@/components/ui";
+import { requireUid } from "@/lib/auth";
 import { claudeUrl } from "@/lib/claude";
 import { daysUntil, fmtDate, fmtDateTime, relDay, todayISO } from "@/lib/dates";
 import { googleAccount, googleConfigured, redirectUri } from "@/lib/google";
@@ -26,14 +27,15 @@ function stateBadge(it: Item, today: string) {
 }
 
 export default async function ClassroomPage({ searchParams }: { searchParams: Promise<{ ver?: string; clase?: string; error?: string; conectado?: string }> }) {
+  const uid = await requireUid();
   const sp = await searchParams;
   const ver = sp.ver ?? "pendientes";
   const today = todayISO();
   const [all, account, lastSync, lastEmail] = await Promise.all([
-    db.select().from(classroomItems).orderBy(sql`${classroomItems.dueDate} asc nulls last`, asc(classroomItems.title)),
-    googleAccount(),
-    getSetting("classroom.last_sync"),
-    getSetting("classroom.last_email"),
+    db.select().from(classroomItems).where(eq(classroomItems.userId, uid)).orderBy(sql`${classroomItems.dueDate} asc nulls last`, asc(classroomItems.title)),
+    googleAccount(uid),
+    getSetting(uid, "classroom.last_sync"),
+    getSetting(uid, "classroom.last_email"),
   ]);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
@@ -199,7 +201,7 @@ export default async function ClassroomPage({ searchParams }: { searchParams: Pr
             )}
             <p className="muted text-xs">
               Se sincroniza con el botón, una vez al día con el cron de Vercel y cada vez que lo llame n8n:{" "}
-              <code className="break-all">GET {origin}/api/cron/classroom</code> con <code>Authorization: Bearer CRON_SECRET</code>.
+              <code className="break-all">GET {origin}/api/cron/classroom</code> con tu <Link href="/cuenta" className="text-indigo-600 hover:underline dark:text-indigo-400">token personal</Link> (<code>Authorization: Bearer pp_…</code>).
             </p>
           </section>
           <section className="space-y-2">
@@ -212,7 +214,8 @@ export default async function ClassroomPage({ searchParams }: { searchParams: Pr
               en n8n.
             </p>
             <p className="muted text-xs">
-              Webhook: <code className="break-all">POST {origin}/api/ingest/classroom-email</code> con <code>Authorization: Bearer CRON_SECRET</code>
+              Webhook: <code className="break-all">POST {origin}/api/ingest/classroom-email</code> con tu{" "}
+              <Link href="/cuenta" className="text-indigo-600 hover:underline dark:text-indigo-400">token personal</Link> (<code>Authorization: Bearer pp_…</code>)
               {lastEmail && <> · Último correo recibido: {fmtDateTime(new Date(lastEmail))}</>}
             </p>
           </section>

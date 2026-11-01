@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { jobEvents, jobs } from "@/db/schema";
@@ -7,7 +7,8 @@ import { ClaudeButton } from "@/components/claude-button";
 import { AutoSubmit, ConfirmButton, ResetOnSubmitForm, SubmitButton } from "@/components/client";
 import { JobFields } from "@/components/job-fields";
 import { Badge, PageHeader, Section, Select } from "@/components/ui";
-import { claudeUrl } from "@/lib/claude";
+import { requireUser } from "@/lib/auth";
+import { aboutMe, claudeUrl } from "@/lib/claude";
 import { JOB_STATUS, opt } from "@/lib/constants";
 import { fmtDate, relDay, todayISO } from "@/lib/dates";
 import { addJobEvent, deleteJob, deleteJobEvent, setJobStatus, updateJob } from "../actions";
@@ -15,11 +16,12 @@ import { addJobEvent, deleteJob, deleteJobEvent, setJobStatus, updateJob } from 
 export const metadata: Metadata = { title: "Vacante" };
 
 export default async function JobPage({ params }: { params: Promise<{ id: string }> }) {
+  const user = await requireUser();
   const jid = Number((await params).id);
   if (!Number.isInteger(jid)) notFound();
-  const [j] = await db.select().from(jobs).where(eq(jobs.id, jid));
+  const [j] = await db.select().from(jobs).where(and(eq(jobs.id, jid), eq(jobs.userId, user.id)));
   if (!j) notFound();
-  const events = await db.select().from(jobEvents).where(eq(jobEvents.jobId, jid)).orderBy(desc(jobEvents.date), desc(jobEvents.id));
+  const events = await db.select().from(jobEvents).where(and(eq(jobEvents.jobId, jid), eq(jobEvents.userId, user.id))).orderBy(desc(jobEvents.date), desc(jobEvents.id));
   const s = opt(JOB_STATUS, j.status);
 
   const prompt = [
@@ -35,6 +37,8 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
     j.notes && `Notas: ${j.notes}`,
     events.length ? "\nHistorial:" : "",
     ...events.slice(0, 15).reverse().map((e) => `- ${fmtDate(e.date, true)}: ${e.note}`),
+    "",
+    aboutMe(user),
   ]
     .filter((l): l is string => typeof l === "string")
     .join("\n");

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { internshipSteps, internships } from "@/db/schema";
@@ -7,7 +7,8 @@ import { ClaudeButton } from "@/components/claude-button";
 import { AutoSubmit, ConfirmButton, ResetOnSubmitForm, SubmitButton } from "@/components/client";
 import { InternshipFields } from "@/components/internship-fields";
 import { Badge, PageHeader, Section, Select } from "@/components/ui";
-import { claudeUrl } from "@/lib/claude";
+import { requireUser } from "@/lib/auth";
+import { aboutMe, claudeUrl } from "@/lib/claude";
 import { INTERNSHIP_STATUS, opt } from "@/lib/constants";
 import { daysUntil, fmtDate, relDay } from "@/lib/dates";
 import { addStep, deleteInternship, deleteStep, setInternshipStatus, toggleStep, updateInternship, updateStep } from "../actions";
@@ -15,11 +16,12 @@ import { addStep, deleteInternship, deleteStep, setInternshipStatus, toggleStep,
 export const metadata: Metadata = { title: "Internship" };
 
 export default async function InternshipPage({ params }: { params: Promise<{ id: string }> }) {
+  const user = await requireUser();
   const iid = Number((await params).id);
   if (!Number.isInteger(iid)) notFound();
-  const [i] = await db.select().from(internships).where(eq(internships.id, iid));
+  const [i] = await db.select().from(internships).where(and(eq(internships.id, iid), eq(internships.userId, user.id)));
   if (!i) notFound();
-  const steps = await db.select().from(internshipSteps).where(eq(internshipSteps.internshipId, iid)).orderBy(asc(internshipSteps.position), asc(internshipSteps.id));
+  const steps = await db.select().from(internshipSteps).where(and(eq(internshipSteps.internshipId, iid), eq(internshipSteps.userId, user.id))).orderBy(asc(internshipSteps.position), asc(internshipSteps.id));
   const done = steps.filter((s) => s.done).length;
   const next = steps.find((s) => !s.done);
 
@@ -38,7 +40,7 @@ export default async function InternshipPage({ params }: { params: Promise<{ id:
     ...steps.map((s) => `- [${s.done ? "x" : " "}] ${s.title}${s.dueDate ? ` (para ${fmtDate(s.dueDate)})` : ""}`),
     "",
     next ? `Ayúdame a completar ahora: "${next.title}".` : "Ayúdame a preparar lo que sigue (entrevistas, seguimiento).",
-    "Soy Eduardo Michel, 19 años, estudiante de 2.º año de Ingeniería en Computación Inteligente (U. de Colima), backend y automatización (Next.js, TypeScript, PostgreSQL, n8n, agentes LLM), inglés B2. Mi GitHub: https://github.com/eduard070512",
+    aboutMe(user),
   ] as (string | null | false)[])
     .filter((l): l is string => typeof l === "string")
     .join("\n");

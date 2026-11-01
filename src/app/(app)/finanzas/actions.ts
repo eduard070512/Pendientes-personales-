@@ -4,7 +4,7 @@ import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { debtPayments, debts, recurring, statements, transactions } from "@/db/schema";
-import { requireAuth } from "@/lib/auth";
+import { requireUid } from "@/lib/auth";
 import { monthRange, todayISO } from "@/lib/dates";
 import { id, optDate, optInt, optMoney, str } from "@/lib/format";
 
@@ -34,24 +34,24 @@ function txFields(fd: FormData) {
 /* ───────────── Movimientos ───────────── */
 
 export async function createTransaction(fd: FormData) {
-  await requireAuth();
+  const uid = await requireUid();
   const { amount, ...rest } = txFields(fd);
   if (!amount || !rest.description) return;
-  await db.insert(transactions).values({ ...rest, amount });
+  await db.insert(transactions).values({ ...rest, amount, userId: uid });
   refresh();
 }
 
 export async function updateTransaction(fd: FormData) {
-  await requireAuth();
+  const uid = await requireUid();
   const { amount, ...rest } = txFields(fd);
   if (!amount || !rest.description) return;
-  await db.update(transactions).set({ ...rest, amount }).where(eq(transactions.id, id(fd)));
+  await db.update(transactions).set({ ...rest, amount }).where(and(eq(transactions.id, id(fd)), eq(transactions.userId, uid)));
   refresh();
 }
 
 export async function deleteTransaction(fd: FormData) {
-  await requireAuth();
-  await db.delete(transactions).where(eq(transactions.id, id(fd)));
+  const uid = await requireUid();
+  await db.delete(transactions).where(and(eq(transactions.id, id(fd)), eq(transactions.userId, uid)));
   refresh();
 }
 
@@ -70,43 +70,54 @@ function recFields(fd: FormData) {
 }
 
 export async function createRecurring(fd: FormData) {
-  await requireAuth();
+  const uid = await requireUid();
   const { amount, ...rest } = recFields(fd);
   if (!rest.name || !amount) return;
-  await db.insert(recurring).values({ ...rest, amount: Math.abs(Number(amount)).toFixed(2), active: true });
+  await db.insert(recurring).values({ ...rest, amount: Math.abs(Number(amount)).toFixed(2), active: true, userId: uid });
   refresh();
 }
 
 export async function updateRecurring(fd: FormData) {
-  await requireAuth();
+  const uid = await requireUid();
   const { amount, ...rest } = recFields(fd);
   if (!rest.name || !amount) return;
-  await db.update(recurring).set({ ...rest, amount: Math.abs(Number(amount)).toFixed(2) }).where(eq(recurring.id, id(fd)));
+  await db
+    .update(recurring)
+    .set({ ...rest, amount: Math.abs(Number(amount)).toFixed(2) })
+    .where(and(eq(recurring.id, id(fd)), eq(recurring.userId, uid)));
   refresh();
 }
 
 export async function deleteRecurring(fd: FormData) {
-  await requireAuth();
-  await db.delete(recurring).where(eq(recurring.id, id(fd)));
+  const uid = await requireUid();
+  await db.delete(recurring).where(and(eq(recurring.id, id(fd)), eq(recurring.userId, uid)));
   refresh();
 }
 
 /** Crea los movimientos fijos del mes que aún no estén registrados. */
 export async function applyRecurring(fd: FormData) {
-  await requireAuth();
+  const uid = await requireUid();
   const ym = str(fd, "month");
   if (!/^\d{4}-\d{2}$/.test(ym)) return;
   const { start, end, days } = monthRange(ym);
-  const items = await db.select().from(recurring).where(eq(recurring.active, true));
+  const items = await db.select().from(recurring).where(and(eq(recurring.userId, uid), eq(recurring.active, true)));
   if (!items.length) return;
   const existing = await db
     .select({ rid: transactions.recurringId })
     .from(transactions)
-    .where(and(gte(transactions.date, start), lte(transactions.date, end), inArray(transactions.recurringId, items.map((i) => i.id))));
+    .where(
+      and(
+        eq(transactions.userId, uid),
+        gte(transactions.date, start),
+        lte(transactions.date, end),
+        inArray(transactions.recurringId, items.map((i) => i.id)),
+      ),
+    );
   const done = new Set(existing.map((e) => e.rid));
   const rows = items
     .filter((i) => !done.has(i.id))
     .map((i) => ({
+      userId: uid,
       date: `${ym}-${String(Math.min(i.dayOfMonth, days)).padStart(2, "0")}`,
       description: i.name,
       amount: i.amount,
@@ -135,44 +146,48 @@ function debtFields(fd: FormData) {
 }
 
 export async function createDebt(fd: FormData) {
-  await requireAuth();
+  const uid = await requireUid();
   const { total, ...rest } = debtFields(fd);
   if (!rest.name || !total) return;
-  await db.insert(debts).values({ ...rest, total });
+  await db.insert(debts).values({ ...rest, total, userId: uid });
   refresh();
 }
 
 export async function updateDebt(fd: FormData) {
-  await requireAuth();
+  const uid = await requireUid();
   const { total, ...rest } = debtFields(fd);
   if (!rest.name || !total) return;
-  await db.update(debts).set({ ...rest, total, closed: fd.get("closed") !== null }).where(eq(debts.id, id(fd)));
+  await db
+    .update(debts)
+    .set({ ...rest, total, closed: fd.get("closed") !== null })
+    .where(and(eq(debts.id, id(fd)), eq(debts.userId, uid)));
   refresh();
 }
 
 export async function deleteDebt(fd: FormData) {
-  await requireAuth();
-  await db.delete(debts).where(eq(debts.id, id(fd)));
+  const uid = await requireUid();
+  await db.delete(debts).where(and(eq(debts.id, id(fd)), eq(debts.userId, uid)));
   refresh();
 }
 
 export async function addDebtPayment(fd: FormData) {
-  await requireAuth();
+  const uid = await requireUid();
   const debtId = Number(fd.get("debtId"));
   const amount = optMoney(fd, "amount");
   if (!debtId || !amount) return;
   const date = optDate(fd, "date") ?? todayISO();
-  const [debt] = await db.select().from(debts).where(eq(debts.id, debtId));
+  const [debt] = await db.select().from(debts).where(and(eq(debts.id, debtId), eq(debts.userId, uid)));
   if (!debt) return;
+  const value = Math.abs(Number(amount)).toFixed(2);
   let transactionId: number | null = null;
   if (fd.get("asExpense") !== null) {
     const [tx] = await db
       .insert(transactions)
-      .values({ date, description: `Pago: ${debt.name}`, amount: Math.abs(Number(amount)).toFixed(2), type: "gasto", kind: "fijo", category: "Deudas" })
+      .values({ userId: uid, date, description: `Pago: ${debt.name}`, amount: value, type: "gasto", kind: "fijo", category: "Deudas" })
       .returning({ id: transactions.id });
     transactionId = tx.id;
   }
-  await db.insert(debtPayments).values({ debtId, date, amount: Math.abs(Number(amount)).toFixed(2), note: str(fd, "note"), transactionId });
+  await db.insert(debtPayments).values({ userId: uid, debtId, date, amount: value, note: str(fd, "note"), transactionId });
   const [{ paid }] = await db
     .select({ paid: sql<string>`coalesce(sum(${debtPayments.amount}),0)` })
     .from(debtPayments)
@@ -182,9 +197,12 @@ export async function addDebtPayment(fd: FormData) {
 }
 
 export async function deleteDebtPayment(fd: FormData) {
-  await requireAuth();
-  const [p] = await db.delete(debtPayments).where(eq(debtPayments.id, id(fd))).returning();
-  if (p?.transactionId) await db.delete(transactions).where(eq(transactions.id, p.transactionId));
+  const uid = await requireUid();
+  const [p] = await db
+    .delete(debtPayments)
+    .where(and(eq(debtPayments.id, id(fd)), eq(debtPayments.userId, uid)))
+    .returning();
+  if (p?.transactionId) await db.delete(transactions).where(and(eq(transactions.id, p.transactionId), eq(transactions.userId, uid)));
   refresh();
 }
 
@@ -204,16 +222,16 @@ export async function importStatement(input: {
   fileName: string;
   rows: ImportRow[];
 }): Promise<{ inserted: number; duplicates: number }> {
-  await requireAuth();
+  const uid = await requireUid();
   const account = input.account.trim() || "Tarjeta";
   const valid = input.rows.filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.date) && r.amount > 0 && Number.isFinite(r.amount));
   if (!valid.length) return { inserted: 0, duplicates: 0 };
 
-  // Huella por movimiento: misma cuenta + fecha + importe + descripción (+ nº de repetición ese día).
+  // Huella por movimiento: usuario + cuenta + fecha + importe + descripción (+ nº de repetición ese día).
   const seen = new Map<string, number>();
   const withHash = await Promise.all(
     valid.map(async (r) => {
-      const base = `${account.toLowerCase()}|${r.date}|${r.amount.toFixed(2)}|${r.type}|${r.description.toLowerCase().replace(/\s+/g, " ").trim()}`;
+      const base = `${uid}|${account.toLowerCase()}|${r.date}|${r.amount.toFixed(2)}|${r.type}|${r.description.toLowerCase().replace(/\s+/g, " ").trim()}`;
       const n = (seen.get(base) ?? 0) + 1;
       seen.set(base, n);
       return { ...r, hash: await sha(`${base}|${n}`) };
@@ -229,11 +247,19 @@ export async function importStatement(input: {
   if (fresh.length) {
     const [st] = await db
       .insert(statements)
-      .values({ account, periodStart: input.periodStart || null, periodEnd: input.periodEnd || null, fileName: input.fileName.slice(0, 200), count: fresh.length })
+      .values({
+        userId: uid,
+        account,
+        periodStart: input.periodStart || null,
+        periodEnd: input.periodEnd || null,
+        fileName: input.fileName.slice(0, 200),
+        count: fresh.length,
+      })
       .returning({ id: statements.id });
     for (let i = 0; i < fresh.length; i += 200) {
       await db.insert(transactions).values(
         fresh.slice(i, i + 200).map((r) => ({
+          userId: uid,
           date: r.date,
           description: r.description.slice(0, 300),
           amount: r.amount.toFixed(2),
@@ -252,7 +278,7 @@ export async function importStatement(input: {
 }
 
 export async function deleteStatement(fd: FormData) {
-  await requireAuth();
-  await db.delete(statements).where(eq(statements.id, id(fd)));
+  const uid = await requireUid();
+  await db.delete(statements).where(and(eq(statements.id, id(fd)), eq(statements.userId, uid)));
   refresh();
 }

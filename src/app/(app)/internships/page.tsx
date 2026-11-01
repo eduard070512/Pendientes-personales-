@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { asc, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { internshipSteps, internships } from "@/db/schema";
 import { SubmitButton } from "@/components/client";
 import { InternshipFields } from "@/components/internship-fields";
 import { Badge, Empty, PageHeader } from "@/components/ui";
+import { requireUid } from "@/lib/auth";
 import { INTERNSHIP_STATUS, opt } from "@/lib/constants";
 import { daysUntil, fmtDate, relDay } from "@/lib/dates";
 import { createInternship, seedInternships } from "./actions";
@@ -15,8 +16,9 @@ export const metadata: Metadata = { title: "Internships" };
 const CLOSED = ["rechazado", "descartado", "oferta"];
 
 export default async function InternshipsPage() {
-  const list = await db.select().from(internships).orderBy(sql`${internships.deadline} asc nulls last`, asc(internships.company));
-  const steps = await db.select().from(internshipSteps).orderBy(asc(internshipSteps.position));
+  const uid = await requireUid();
+  const list = await db.select().from(internships).where(eq(internships.userId, uid)).orderBy(sql`${internships.deadline} asc nulls last`, asc(internships.company));
+  const steps = await db.select().from(internshipSteps).where(eq(internshipSteps.userId, uid)).orderBy(asc(internshipSteps.position));
   const byI = new Map<number, typeof steps>();
   for (const s of steps) byI.set(s.internshipId, [...(byI.get(s.internshipId) ?? []), s]);
 
@@ -77,7 +79,7 @@ export default async function InternshipsPage() {
         <Empty>
           <p className="mb-3">Aún no tienes internships registrados.</p>
           <form action={seedInternships}>
-            <SubmitButton pendingText="Cargando…">Cargar mi plan 2026–2027 (Microsoft, Oracle, GSoC…)</SubmitButton>
+            <SubmitButton pendingText="Cargando…">Cargar plan de ejemplo 2026–2027 (Microsoft, Oracle, GSoC…)</SubmitButton>
           </form>
         </Empty>
       ) : (

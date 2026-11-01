@@ -10,30 +10,34 @@ import { KIND_STYLE, eventsBetween } from "@/lib/events";
 import { monthSummary } from "@/lib/finance";
 import { money } from "@/lib/format";
 import { InstallButton } from "@/components/install-button";
-import { logout } from "../login/actions";
+import { requireUser } from "@/lib/auth";
+import { logout } from "../(auth)/actions";
 import { createTask } from "./pendientes/actions";
 
 export default async function Home() {
+  const user = await requireUser();
+  const uid = user.id;
   const today = todayISO();
   const [urgent, noDate, upcoming, fin, school] = await Promise.all([
     db
       .select()
       .from(tasks)
-      .where(and(ne(tasks.status, "hecho"), lte(tasks.dueDate, today)))
+      .where(and(eq(tasks.userId, uid), ne(tasks.status, "hecho"), lte(tasks.dueDate, today)))
       .orderBy(tasks.dueDate),
     db
       .select()
       .from(tasks)
-      .where(and(ne(tasks.status, "hecho"), sql`${tasks.dueDate} is null`))
+      .where(and(eq(tasks.userId, uid), ne(tasks.status, "hecho"), sql`${tasks.dueDate} is null`))
       .orderBy(sql`case ${tasks.priority} when 'alta' then 0 when 'media' then 1 else 2 end`, tasks.createdAt)
       .limit(5),
-    eventsBetween(addDays(today, 1), addDays(today, 14)),
-    monthSummary(monthKey(today)),
+    eventsBetween(uid, addDays(today, 1), addDays(today, 14)),
+    monthSummary(uid, monthKey(today)),
     db
       .select()
       .from(classroomItems)
       .where(
         and(
+          eq(classroomItems.userId, uid),
           eq(classroomItems.state, "pendiente"),
           eq(classroomItems.hidden, false),
           isNull(classroomItems.taskId),
@@ -50,7 +54,7 @@ export default async function Home() {
         <div className="mb-3 md:hidden">
           <InstallButton className="btn-secondary w-full" />
         </div>
-        <h1 className="h1">Hola, Eduardo 👋</h1>
+        <h1 className="h1">Hola{user.name ? `, ${user.name.split(" ")[0]}` : ""} 👋</h1>
         <p className="muted text-sm">
           Hoy es {fmtDate(today, true)}. {urgent.length ? `Tienes ${urgent.length} pendiente${urgent.length > 1 ? "s" : ""} para hoy o atrasados.` : "Nada urgente para hoy."}
         </p>

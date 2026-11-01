@@ -1,9 +1,10 @@
 # Pendientes personales
 
-App personal (solo para ti, con inicio de sesión) para organizar:
+App para organizar tu vida: cada persona se **registra gratis** con su correo y ve solo sus datos.
 
 | Sección | Qué hace |
 |---|---|
+| **Cuentas** | Registro gratis, inicio de sesión, **recuperar contraseña por correo**, Mi cuenta (perfil, cambiar contraseña, cerrar sesión en todos lados, borrar cuenta). Cada usuario tiene su plan (`free` por ahora) para cobrar en el futuro. |
 | **Inicio** | Lo de hoy y atrasado, lo de las próximas 2 semanas y un resumen del dinero del mes. |
 | **Pendientes** | Agregar, editar y completar pendientes con fecha, prioridad y categoría. Cada uno tiene **seguimiento** (bitácora) y un botón **Trabajar con Claude** que abre Claude (web o app en el celular) con todo el contexto del pendiente. |
 | **Classroom** | Tus tareas de Google Classroom: por entregar, atrasadas, entregadas y calificadas, por clase. Botón para **pasarla a pendientes** (se marca hecha sola cuando la entregas) y para **hacerla con Claude**. Aparecen en el calendario y en el inicio. |
@@ -31,12 +32,19 @@ En Vercel → tu proyecto → **Settings → Environment Variables** agrega:
 | Variable | Valor |
 |---|---|
 | `DATABASE_URL` | La cadena de Neon |
-| `APP_USER` | Tu usuario para entrar |
-| `APP_PASSWORD` | Una contraseña larga |
 | `SESSION_SECRET` | 64 caracteres aleatorios (`openssl rand -hex 32`) |
-| `CRON_SECRET` | Token para el cron y n8n (`openssl rand -hex 32`) |
+| `APP_URL` | La URL de tu app, p. ej. `https://pendientes.vercel.app` (para los enlaces de los correos) |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Para mandar el correo de "olvidé mi contraseña" (ver abajo) |
+| `OWNER_EMAIL` *(opcional)* | Si ya usabas la app antes de las cuentas: tus datos viejos pasan a quien se registre con este correo |
+| `CRON_SECRET` | Secreto del cron diario de Classroom (`openssl rand -hex 32`) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` *(opcional)* | Para conectar Classroom (ver paso 4) |
-| `APP_URL` *(opcional)* | La URL de tu app, p. ej. `https://pendientes.vercel.app`, para que el mensaje a Claude incluya el enlace al pendiente |
+
+### Correos para recuperar contraseña (Resend)
+1. Crea una cuenta gratis en [resend.com](https://resend.com) (3,000 correos al mes).
+2. **Domains → Add domain** y agrega los registros DNS que te da (si no tienes dominio, mientras tanto solo puedes enviarte correos a ti mismo con `onboarding@resend.dev`).
+3. **API Keys → Create** y pégala en `RESEND_API_KEY`. En `EMAIL_FROM` pon algo como `Pendientes <no-reply@tudominio.com>`.
+
+Si no lo configuras, la app funciona igual, pero el enlace para restablecer la contraseña solo aparece en los logs de Vercel.
 
 ### 3. Deploy
 1. Vercel → **Add New → Project → Import** este repositorio. Framework: Next.js (lo detecta solo).
@@ -53,14 +61,15 @@ Hay dos formas de traer tus tareas. Puedes usar una o las dos.
 4. Agrega en Vercel `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y `CRON_SECRET` (`openssl rand -hex 32`), y vuelve a hacer deploy.
 5. En la app: **Classroom → Conexión con Classroom → Conectar mi cuenta de la escuela**.
 
-Se sincroniza con el botón **Sincronizar ahora**, una vez al día con el cron de Vercel (`vercel.json`, 7:00 a. m. de México) y cada vez que n8n llame a `GET /api/cron/classroom` con `Authorization: Bearer CRON_SECRET`.
+Cada usuario conecta su propia cuenta de Google. Se sincroniza con el botón **Sincronizar ahora**, una vez al día para todos con el cron de Vercel (`vercel.json`, 7:00 a. m. de México) y cada vez que n8n llame a `GET /api/cron/classroom` con el **token personal** del usuario (Mi cuenta → Token para n8n).
 
 > Si al conectar Google dice que tu institución bloqueó el acceso (*admin_policy_enforced*), usa la opción B.
 
 **B. Correos de Classroom con n8n (respaldo)**
 1. En la app, Classroom → Conexión → descarga el workflow (o usa `public/n8n/classroom-gmail.json`) e impórtalo en n8n.
 2. En el nodo **Correo de Classroom** elige tu credencial de Gmail (la de la escuela, o la personal si reenvías ahí los correos de Classroom con un filtro).
-3. En los dos nodos HTTP cambia `TU-APP.vercel.app` por tu dominio y `TU_CRON_SECRET` por tu `CRON_SECRET`. Actívalo.
+3. En la app ve a **Mi cuenta → Token para n8n → Generar token**.
+4. En los dos nodos HTTP cambia `TU-APP.vercel.app` por tu dominio y `TU_TOKEN_PERSONAL` por ese token. Actívalo.
 
 El workflow también trae un disparador cada 2 horas que llama a la sincronización de la API (puedes borrarlo si solo usas correos). Desde los correos se obtiene título, clase, enlace y, si viene, la fecha de entrega; cuando llega un correo de "trabajo devuelto" la tarea se marca como devuelta.
 
@@ -87,7 +96,7 @@ Si cambias `src/db/schema.ts`, genera la migración con `npm run db:generate` y 
 ```
 src/
   app/(app)/        Secciones (pendientes, calendario, internships, trabajos, clientes, finanzas)
-  app/login/        Inicio de sesión
+  app/(auth)/       Registro, inicio de sesión y recuperar contraseña
   db/schema.ts      Tablas
   lib/              Fechas, sesión, parser de estados de cuenta y de correos de Classroom, estadísticas
   app/api/          Google OAuth, cron de Classroom y webhook para n8n

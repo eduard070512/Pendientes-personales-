@@ -1,4 +1,7 @@
 import "server-only";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { settings } from "@/db/schema";
 import { decrypt, deleteSetting, encrypt, getSetting, setSetting } from "./settings";
 
 export const GOOGLE_SCOPES = [
@@ -49,27 +52,33 @@ async function tokenRequest(body: Record<string, string>) {
 }
 
 /** Intercambia el código del callback y guarda el refresh token (cifrado). */
-export async function connectWithCode(code: string, origin: string) {
+export async function connectWithCode(userId: number, code: string, origin: string) {
   const t = await tokenRequest({ code, grant_type: "authorization_code", redirect_uri: redirectUri(origin) });
   if (!t.refresh_token) throw new Error("Google no devolvió un refresh token. Quita el acceso de la app en tu cuenta de Google y vuelve a conectar.");
-  await setSetting(TOKEN_KEY, await encrypt(t.refresh_token));
+  await setSetting(userId, TOKEN_KEY, await encrypt(t.refresh_token));
   if (t.id_token) {
     try {
       const payload = JSON.parse(Buffer.from(t.id_token.split(".")[1], "base64url").toString());
-      if (payload.email) await setSetting(EMAIL_KEY, payload.email);
+      if (payload.email) await setSetting(userId, EMAIL_KEY, payload.email);
     } catch {
       /* el correo es solo informativo */
     }
   }
 }
 
-export async function googleAccount() {
-  const token = await getSetting(TOKEN_KEY);
-  return token ? { email: (await getSetting(EMAIL_KEY)) ?? "cuenta conectada" } : null;
+export async function googleAccount(userId: number) {
+  const token = await getSetting(userId, TOKEN_KEY);
+  return token ? { email: (await getSetting(userId, EMAIL_KEY)) ?? "cuenta conectada" } : null;
 }
 
-export async function disconnectGoogle() {
-  const stored = await getSetting(TOKEN_KEY);
+/** Usuarios con Google conectado (para el cron). */
+export async function connectedUserIds() {
+  const rows = await db.select({ userId: settings.userId }).from(settings).where(eq(settings.key, TOKEN_KEY));
+  return rows.map((r) => r.userId);
+}
+
+export async function disconnectGoogle(userId: number) {
+  const stored = await getSetting(userId, TOKEN_KEY);
   if (stored) {
     try {
       await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(await decrypt(stored))}`, { method: "POST" });
@@ -77,12 +86,12 @@ export async function disconnectGoogle() {
       /* si falla la revocación, igual se borra localmente */
     }
   }
-  await deleteSetting(TOKEN_KEY);
-  await deleteSetting(EMAIL_KEY);
+  await deleteSetting(userId, TOKEN_KEY);
+  await deleteSetting(userId, EMAIL_KEY);
 }
 
-export async function accessToken() {
-  const stored = await getSetting(TOKEN_KEY);
+export async function accessToken(userId: number) {
+  const stored = await getSetting(userId, TOKEN_KEY);
   if (!stored) return null;
   const t = await tokenRequest({ refresh_token: await decrypt(stored), grant_type: "refresh_token" });
   return t.access_token!;

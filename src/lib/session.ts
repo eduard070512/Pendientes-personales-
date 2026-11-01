@@ -1,5 +1,5 @@
-// Firma y verificación de la cookie de sesión con HMAC-SHA256 (Web Crypto),
-// válido tanto en el proxy como en el servidor.
+// Cookie de sesión firmada con HMAC-SHA256 (Web Crypto): sirve en el proxy y en el servidor.
+// Formato: v2.<userId>.<sessionVersion>.<expira>.<firma>
 
 export const SESSION_COOKIE = "pp_session";
 export const SESSION_DAYS = 30;
@@ -13,36 +13,37 @@ function toHex(buf: ArrayBuffer) {
 async function hmac(value: string) {
   const secret = process.env.SESSION_SECRET;
   if (!secret || secret.length < 16) throw new Error("SESSION_SECRET no está configurada (mínimo 16 caracteres).");
-  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
-    "sign",
-  ]);
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return toHex(await crypto.subtle.sign("HMAC", key, enc.encode(value)));
 }
 
-function safeEqual(a: string, b: string) {
+export function safeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
 
-export async function createSessionToken() {
+export async function createSessionToken(userId: number, version: number) {
   const expires = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
-  const payload = `v1.${expires}`;
+  const payload = `v2.${userId}.${version}.${expires}`;
   return `${payload}.${await hmac(payload)}`;
 }
 
-export async function verifySessionToken(token: string | undefined) {
-  if (!token) return false;
+export type SessionPayload = { userId: number; version: number };
+
+export async function verifySessionToken(token: string | undefined): Promise<SessionPayload | null> {
+  if (!token) return null;
   const parts = token.split(".");
-  if (parts.length !== 3 || parts[0] !== "v1") return false;
-  const expires = Number(parts[1]);
-  if (!Number.isFinite(expires) || expires < Date.now()) return false;
+  if (parts.length !== 5 || parts[0] !== "v2") return null;
+  const [, uid, ver, exp, sig] = parts;
+  const userId = Number(uid);
+  const version = Number(ver);
+  const expires = Number(exp);
+  if (!Number.isInteger(userId) || !Number.isInteger(version) || !Number.isFinite(expires) || expires < Date.now()) return null;
   try {
-    return safeEqual(parts[2], await hmac(`${parts[0]}.${parts[1]}`));
+    return safeEqual(sig, await hmac(parts.slice(0, 4).join("."))) ? { userId, version } : null;
   } catch {
-    return false;
+    return null;
   }
 }
-
-export { safeEqual };

@@ -11,11 +11,13 @@ import { TX_KIND, opt } from "@/lib/constants";
 import { fmtDate, monthKey, monthRange, todayISO } from "@/lib/dates";
 import { distinctAccounts } from "@/lib/finance";
 import { money } from "@/lib/format";
+import { requireUid } from "@/lib/auth";
 import { createTransaction, deleteTransaction, updateTransaction } from "../actions";
 
 export const metadata: Metadata = { title: "Movimientos" };
 
 export default async function MovementsPage({ searchParams }: { searchParams: Promise<{ mes?: string; tipo?: string; cat?: string; cuenta?: string }> }) {
+  const uid = await requireUid();
   const sp = await searchParams;
   const today = todayISO();
   const ym = parseMonth(sp.mes, monthKey(today));
@@ -23,9 +25,9 @@ export default async function MovementsPage({ searchParams }: { searchParams: Pr
   const all = await db
     .select()
     .from(transactions)
-    .where(and(gte(transactions.date, start), lte(transactions.date, end)))
+    .where(and(eq(transactions.userId, uid), gte(transactions.date, start), lte(transactions.date, end)))
     .orderBy(desc(transactions.date), desc(transactions.id));
-  const accounts = await distinctAccounts();
+  const accounts = await distinctAccounts(uid);
   const list = all.filter(
     (t) => (!sp.tipo || t.type === sp.tipo) && (!sp.cat || t.category === sp.cat) && (!sp.cuenta || t.account === sp.cuenta),
   );

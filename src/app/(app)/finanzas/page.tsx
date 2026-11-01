@@ -7,6 +7,7 @@ import { Section, Stat } from "@/components/ui";
 import { monthKey, monthLabel, todayISO } from "@/lib/dates";
 import { allTimeTotals, byCategory, debtsWithBalance, distinctAccounts, monthSummary, pendingRecurring, trend } from "@/lib/finance";
 import { money } from "@/lib/format";
+import { requireUid } from "@/lib/auth";
 import { applyRecurring, createTransaction } from "./actions";
 
 export const metadata: Metadata = { title: "Finanzas" };
@@ -36,17 +37,18 @@ function Bars({ items, total, color }: { items: { category: string; total: numbe
 }
 
 export default async function FinancePage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
+  const uid = await requireUid();
   const today = todayISO();
   const ym = parseMonth((await searchParams).mes, monthKey(today));
   const [s, expenses, incomes, tr, debts, pending, accounts, all] = await Promise.all([
-    monthSummary(ym),
-    byCategory(ym, "gasto"),
-    byCategory(ym, "ingreso"),
-    trend(ym, 12),
-    debtsWithBalance(),
-    pendingRecurring(ym),
-    distinctAccounts(),
-    allTimeTotals(),
+    monthSummary(uid, ym),
+    byCategory(uid, ym, "gasto"),
+    byCategory(uid, ym, "ingreso"),
+    trend(uid, ym, 12),
+    debtsWithBalance(uid),
+    pendingRecurring(uid, ym),
+    distinctAccounts(uid),
+    allTimeTotals(uid),
   ]);
   const openDebts = debts.filter((d) => !d.closed);
   const debtTotal = openDebts.reduce((a, d) => a + d.balance, 0);

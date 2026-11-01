@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { clientNotes, clients } from "@/db/schema";
@@ -7,7 +7,8 @@ import { ClaudeButton } from "@/components/claude-button";
 import { AutoSubmit, ConfirmButton, ResetOnSubmitForm, SubmitButton } from "@/components/client";
 import { ClientFields } from "@/components/client-fields";
 import { Badge, PageHeader, Section, Select } from "@/components/ui";
-import { claudeUrl } from "@/lib/claude";
+import { requireUser } from "@/lib/auth";
+import { aboutMe, claudeUrl } from "@/lib/claude";
 import { CLIENT_STAGE, opt } from "@/lib/constants";
 import { fmtDate, relDay, todayISO } from "@/lib/dates";
 import { money } from "@/lib/format";
@@ -17,17 +18,19 @@ import { addClientNote, deleteClient, deleteClientNote, setClientStage, updateCl
 export const metadata: Metadata = { title: "Cliente" };
 
 export default async function ClientPage({ params }: { params: Promise<{ id: string }> }) {
+  const user = await requireUser();
   const cid = Number((await params).id);
   if (!Number.isInteger(cid)) notFound();
-  const [c] = await db.select().from(clients).where(eq(clients.id, cid));
+  const [c] = await db.select().from(clients).where(and(eq(clients.id, cid), eq(clients.userId, user.id)));
   if (!c) notFound();
-  const notes = await db.select().from(clientNotes).where(eq(clientNotes.clientId, cid)).orderBy(desc(clientNotes.date), desc(clientNotes.id));
+  const notes = await db.select().from(clientNotes).where(and(eq(clientNotes.clientId, cid), eq(clientNotes.userId, user.id))).orderBy(desc(clientNotes.date), desc(clientNotes.id));
   const s = opt(CLIENT_STAGE, c.stage);
   const wa = c.phone ? whatsappUrl(c.phone) : null;
   const tel = c.phone ? telUrl(c.phone) : null;
 
   const prompt = [
-    "Vendo menús digitales y sistemas para restaurantes. Ayúdame con el siguiente paso con este prospecto (mensaje de seguimiento por WhatsApp, propuesta, manejo de objeciones o cierre).",
+    "Ayúdame con el siguiente paso con este prospecto/cliente (mensaje de seguimiento por WhatsApp, propuesta, manejo de objeciones o cierre).",
+    aboutMe(user),
     "",
     `Contacto: ${c.name}${c.business ? ` — ${c.business}` : ""}${c.city ? ` (${c.city})` : ""}`,
     c.product && `Producto que le interesa: ${c.product}`,

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { debtPayments } from "@/db/schema";
 import { ConfirmButton, ResetOnSubmitForm, SubmitButton } from "@/components/client";
@@ -7,6 +7,7 @@ import { Badge, Field, Section } from "@/components/ui";
 import { fmtDate, todayISO } from "@/lib/dates";
 import { debtsWithBalance } from "@/lib/finance";
 import { money } from "@/lib/format";
+import { requireUid } from "@/lib/auth";
 import { addDebtPayment, createDebt, deleteDebt, deleteDebtPayment, updateDebt } from "../actions";
 
 export const metadata: Metadata = { title: "Deudas" };
@@ -47,8 +48,9 @@ function DebtFields({ d }: { d?: D }) {
 }
 
 export default async function DebtsPage() {
-  const list = await debtsWithBalance();
-  const payments = await db.select().from(debtPayments).orderBy(desc(debtPayments.date), desc(debtPayments.id));
+  const uid = await requireUid();
+  const list = await debtsWithBalance(uid);
+  const payments = await db.select().from(debtPayments).where(eq(debtPayments.userId, uid)).orderBy(desc(debtPayments.date), desc(debtPayments.id));
   const open = list.filter((d) => !d.closed);
   const total = open.reduce((a, d) => a + d.balance, 0);
   const monthly = open.reduce((a, d) => a + Number(d.minPayment ?? 0), 0);

@@ -1,20 +1,34 @@
 import { NextResponse } from "next/server";
-import { bearerOk } from "@/lib/api-auth";
+import { cronOk, userFromToken } from "@/lib/api-auth";
 import { syncFromApi } from "@/lib/classroom";
-import { googleAccount } from "@/lib/google";
+import { connectedUserIds } from "@/lib/google";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
-/** Sincroniza Classroom. Lo llama el cron de Vercel (GET) o n8n (GET/POST) con Bearer CRON_SECRET. */
+/**
+ * Sincroniza Classroom.
+ * - Con `Bearer CRON_SECRET` (cron de Vercel): todos los usuarios que conectaron Google.
+ * - Con `Bearer <token personal>` (n8n): solo ese usuario.
+ */
 async function handle(req: Request) {
-  if (!bearerOk(req)) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  if (!(await googleAccount())) return NextResponse.json({ skipped: "Google no conectado" });
-  try {
-    return NextResponse.json({ ok: true, ...(await syncFromApi()) });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+  let ids: number[];
+  if (cronOk(req)) ids = await connectedUserIds();
+  else {
+    const uid = await userFromToken(req);
+    if (!uid) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    ids = [uid];
   }
+  const results: { user: number; ok: boolean; items?: number; error?: string }[] = [];
+  for (const uid of ids) {
+    try {
+      const r = await syncFromApi(uid);
+      results.push({ user: uid, ok: true, items: r.items });
+    } catch (e) {
+      results.push({ user: uid, ok: false, error: (e as Error).message });
+    }
+  }
+  return NextResponse.json({ synced: results.filter((r) => r.ok).length, results });
 }
 
 export const GET = handle;

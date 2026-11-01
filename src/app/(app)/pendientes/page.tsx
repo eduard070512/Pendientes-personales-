@@ -6,6 +6,7 @@ import { ResetOnSubmitForm, SubmitButton } from "@/components/client";
 import { TaskFields } from "@/components/task-fields";
 import { TaskRow, type TaskRowData } from "@/components/task-row";
 import { Empty, PageHeader, Tabs } from "@/components/ui";
+import { requireUid } from "@/lib/auth";
 import { addDays, todayISO } from "@/lib/dates";
 import { createTask } from "./actions";
 
@@ -26,14 +27,15 @@ function group(list: TaskRowData[]) {
 }
 
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ ver?: string; cat?: string }> }) {
+  const uid = await requireUid();
   const { ver = "activos", cat } = await searchParams;
   const where = ver === "hechos" ? eq(tasks.status, "hecho") : ver === "todos" ? undefined : ne(tasks.status, "hecho");
   const rows = await db
     .select()
     .from(tasks)
-    .where(and(where, cat ? eq(tasks.category, cat) : undefined))
+    .where(and(eq(tasks.userId, uid), where, cat ? eq(tasks.category, cat) : undefined))
     .orderBy(ver === "hechos" ? desc(tasks.completedAt) : sql`${tasks.dueDate} asc nulls last`, asc(tasks.createdAt));
-  const cats = (await db.selectDistinct({ c: tasks.category }).from(tasks).where(ne(tasks.category, ""))).map((r) => r.c).sort();
+  const cats = (await db.selectDistinct({ c: tasks.category }).from(tasks).where(and(eq(tasks.userId, uid), ne(tasks.category, "")))).map((r) => r.c).sort();
   const q = (v: string) => `/pendientes?ver=${v}${cat ? `&cat=${encodeURIComponent(cat)}` : ""}`;
 
   return (

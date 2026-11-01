@@ -51,7 +51,7 @@ function mapState(s?: string) {
 }
 
 /** Si una tarea ligada a un pendiente ya se entregó, marca el pendiente como hecho. */
-async function closeLinkedTasks(externalIds: string[]) {
+async function closeLinkedTasks(uid: number, externalIds: string[]) {
   if (!externalIds.length) return;
   const done = await db
     .select({ taskId: classroomItems.taskId })
@@ -59,6 +59,7 @@ async function closeLinkedTasks(externalIds: string[]) {
     .innerJoin(tasks, eq(tasks.id, classroomItems.taskId))
     .where(
       and(
+        eq(classroomItems.userId, uid),
         inArray(classroomItems.externalId, externalIds),
         inArray(classroomItems.state, ["entregada", "devuelta"]),
         isNotNull(classroomItems.taskId),
@@ -68,12 +69,12 @@ async function closeLinkedTasks(externalIds: string[]) {
   for (const { taskId } of done) {
     if (!taskId) continue;
     await db.update(tasks).set({ status: "hecho", completedAt: new Date(), updatedAt: new Date() }).where(eq(tasks.id, taskId));
-    await db.insert(taskUpdates).values({ taskId, note: "Entregada en Classroom ✓" });
+    await db.insert(taskUpdates).values({ taskId, userId: uid, note: "Entregada en Classroom ✓" });
   }
 }
 
-export async function syncFromApi() {
-  const token = await accessToken();
+export async function syncFromApi(uid: number) {
+  const token = await accessToken(uid);
   if (!token) throw new Error("Conecta tu cuenta de Google primero.");
 
   const courses = await getAll<{ id: string; name: string; section?: string }>(token, "/courses?studentId=me&courseStates=ACTIVE", "courses");
@@ -97,6 +98,7 @@ export async function syncFromApi() {
       const s = subBy.get(w.id);
       const { dueDate, dueTime } = toLocalDue(w.dueDate, w.dueTime);
       const values = {
+        userId: uid,
         externalId: w.id,
         courseId: c.id,
         courseName,
@@ -112,27 +114,31 @@ export async function syncFromApi() {
         workType: w.workType ?? "",
         source: "api",
       };
-      const { externalId, ...update } = values;
+      const { externalId, userId: _u, ...update } = values;
       await db
         .insert(classroomItems)
         .values(values)
-        .onConflictDoUpdate({ target: classroomItems.externalId, set: { ...update, updatedAt: new Date() } });
+        .onConflictDoUpdate({ target: [classroomItems.userId, classroomItems.externalId], set: { ...update, updatedAt: new Date() } });
       ids.push(externalId);
       count++;
     }
   }
-  await closeLinkedTasks(ids);
-  await setSetting("classroom.last_sync", new Date().toISOString());
+  await closeLinkedTasks(uid, ids);
+  await setSetting(uid, "classroom.last_sync", new Date().toISOString());
   return { courses: courses.length, items: count };
 }
 
 /** Guarda tareas leídas de correos. No pisa datos más completos que ya vinieron de la API. */
-export async function upsertFromEmails(items: EmailItem[]) {
+export async function upsertFromEmails(uid: number, items: EmailItem[]) {
   let saved = 0;
   for (const it of items) {
-    const [prev] = await db.select().from(classroomItems).where(eq(classroomItems.externalId, it.externalId));
+    const [prev] = await db
+      .select()
+      .from(classroomItems)
+      .where(and(eq(classroomItems.userId, uid), eq(classroomItems.externalId, it.externalId)));
     if (!prev) {
       await db.insert(classroomItems).values({
+        userId: uid,
         externalId: it.externalId,
         courseId: it.courseId,
         courseName: it.courseName,
@@ -159,7 +165,7 @@ export async function upsertFromEmails(items: EmailItem[]) {
     }
     saved++;
   }
-  await closeLinkedTasks(items.map((i) => i.externalId));
-  if (saved) await setSetting("classroom.last_email", new Date().toISOString());
+  await closeLinkedTasks(uid, items.map((i) => i.externalId));
+  if (saved) await setSetting(uid, "classroom.last_email", new Date().toISOString());
   return saved;
 }

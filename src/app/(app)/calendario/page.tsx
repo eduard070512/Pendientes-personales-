@@ -5,6 +5,7 @@ import { MonthPicker, parseMonth } from "@/components/month-picker";
 import { PageHeader } from "@/components/ui";
 import { fmtDate, monthKey, monthRange, todayISO } from "@/lib/dates";
 import { KIND_STYLE, eventsBetween, type CalEvent } from "@/lib/events";
+import { requireUid } from "@/lib/auth";
 import { createTask } from "../pendientes/actions";
 
 export const metadata: Metadata = { title: "Calendario" };
@@ -12,12 +13,13 @@ export const metadata: Metadata = { title: "Calendario" };
 const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ mes?: string; pagos?: string }> }) {
+  const uid = await requireUid();
   const sp = await searchParams;
   const today = todayISO();
   const ym = parseMonth(sp.mes, monthKey(today));
   const showMoney = sp.pagos !== "0";
   const { start, end, days } = monthRange(ym);
-  const events = await eventsBetween(start, end, { includeMoney: showMoney });
+  const events = await eventsBetween(uid, start, end, { includeMoney: showMoney });
   const byDay = new Map<string, CalEvent[]>();
   for (const e of events) byDay.set(e.date, [...(byDay.get(e.date) ?? []), e]);
 

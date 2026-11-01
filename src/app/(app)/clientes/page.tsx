@@ -6,6 +6,7 @@ import { clients } from "@/db/schema";
 import { SubmitButton } from "@/components/client";
 import { ClientFields } from "@/components/client-fields";
 import { Badge, Empty, PageHeader, Tabs } from "@/components/ui";
+import { requireUid } from "@/lib/auth";
 import { CLIENT_STAGE, opt } from "@/lib/constants";
 import { daysUntil, fmtDate, relDay } from "@/lib/dates";
 import { money } from "@/lib/format";
@@ -15,10 +16,12 @@ import { createClient } from "./actions";
 export const metadata: Metadata = { title: "Clientes" };
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ etapa?: string; q?: string }> }) {
+  const uid = await requireUid();
   const { etapa = "todos", q = "" } = await searchParams;
   const counts = await db
     .select({ stage: clients.stage, n: sql<number>`count(*)`, v: sql<string>`coalesce(sum(${clients.value}),0)` })
     .from(clients)
+    .where(eq(clients.userId, uid))
     .groupBy(clients.stage);
   const total = counts.reduce((a, c) => a + Number(c.n), 0);
   const pipeline = counts.filter((c) => !["cliente", "perdido"].includes(c.stage)).reduce((a, c) => a + Number(c.v), 0);
@@ -30,6 +33,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
     .from(clients)
     .where(
       and(
+        eq(clients.userId, uid),
         etapa === "todos" ? undefined : eq(clients.stage, etapa),
         search ? or(ilike(clients.name, search), ilike(clients.business, search), ilike(clients.phone, search), ilike(clients.city, search)) : undefined,
       ),

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { taskUpdates, tasks } from "@/db/schema";
@@ -7,6 +7,7 @@ import { ClaudeButton } from "@/components/claude-button";
 import { AutoSubmit, ConfirmButton, ResetOnSubmitForm, SubmitButton } from "@/components/client";
 import { TaskFields } from "@/components/task-fields";
 import { Badge, PageHeader, Section, Select } from "@/components/ui";
+import { requireUid } from "@/lib/auth";
 import { appUrl, claudeUrl } from "@/lib/claude";
 import { PRIORITY, TASK_STATUS, opt } from "@/lib/constants";
 import { fmtDate, fmtDateTime, relDay } from "@/lib/dates";
@@ -15,12 +16,13 @@ import { addTaskUpdate, deleteTask, deleteTaskUpdate, setTaskStatus, startWithCl
 export const metadata: Metadata = { title: "Pendiente" };
 
 export default async function TaskPage({ params }: { params: Promise<{ id: string }> }) {
+  const uid = await requireUid();
   const taskId = Number((await params).id);
   if (!Number.isInteger(taskId)) notFound();
-  const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+  const [task] = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.userId, uid)));
   if (!task) notFound();
-  const updates = await db.select().from(taskUpdates).where(eq(taskUpdates.taskId, taskId)).orderBy(desc(taskUpdates.createdAt));
-  const cats = (await db.selectDistinct({ c: tasks.category }).from(tasks).where(ne(tasks.category, ""))).map((r) => r.c);
+  const updates = await db.select().from(taskUpdates).where(and(eq(taskUpdates.taskId, taskId), eq(taskUpdates.userId, uid))).orderBy(desc(taskUpdates.createdAt));
+  const cats = (await db.selectDistinct({ c: tasks.category }).from(tasks).where(and(eq(tasks.userId, uid), ne(tasks.category, "")))).map((r) => r.c);
 
   const history = updates
     .slice(0, 15)

@@ -4,12 +4,12 @@ import { db } from "@/db";
 import { debtPayments, debts, recurring, transactions } from "@/db/schema";
 import { monthRange, shiftMonth } from "./dates";
 
-export async function monthSummary(ym: string) {
+export async function monthSummary(uid: number, ym: string) {
   const { start, end } = monthRange(ym);
   const rows = await db
     .select({ type: transactions.type, kind: transactions.kind, total: sql<string>`sum(${transactions.amount})`, n: sql<number>`count(*)` })
     .from(transactions)
-    .where(and(gte(transactions.date, start), lte(transactions.date, end)))
+    .where(and(eq(transactions.userId, uid), gte(transactions.date, start), lte(transactions.date, end)))
     .groupBy(transactions.type, transactions.kind);
   const pick = (type: string, kind?: string) =>
     rows.filter((r) => r.type === type && (!kind || r.kind === kind)).reduce((a, r) => a + Number(r.total), 0);
@@ -30,23 +30,23 @@ export async function monthSummary(ym: string) {
   };
 }
 
-export async function byCategory(ym: string, type: "ingreso" | "gasto") {
+export async function byCategory(uid: number, ym: string, type: "ingreso" | "gasto") {
   const { start, end } = monthRange(ym);
   const rows = await db
     .select({ category: transactions.category, total: sql<string>`sum(${transactions.amount})`, n: sql<number>`count(*)` })
     .from(transactions)
-    .where(and(eq(transactions.type, type), gte(transactions.date, start), lte(transactions.date, end)))
+    .where(and(eq(transactions.userId, uid), eq(transactions.type, type), gte(transactions.date, start), lte(transactions.date, end)))
     .groupBy(transactions.category)
     .orderBy(desc(sql`sum(${transactions.amount})`));
   return rows.map((r) => ({ category: r.category, total: Number(r.total), n: Number(r.n) }));
 }
 
-export async function trend(ym: string, months = 12) {
+export async function trend(uid: number, ym: string, months = 12) {
   const first = shiftMonth(ym, -(months - 1));
   const rows = await db
     .select({ m: sql<string>`to_char(${transactions.date}, 'YYYY-MM')`, type: transactions.type, total: sql<string>`sum(${transactions.amount})` })
     .from(transactions)
-    .where(and(gte(transactions.date, `${first}-01`), lte(transactions.date, monthRange(ym).end)))
+    .where(and(eq(transactions.userId, uid), gte(transactions.date, `${first}-01`), lte(transactions.date, monthRange(ym).end)))
     .groupBy(sql`1`, transactions.type);
   return Array.from({ length: months }, (_, i) => {
     const m = shiftMonth(first, i);
@@ -55,21 +55,23 @@ export async function trend(ym: string, months = 12) {
   });
 }
 
-export async function allTimeTotals() {
+export async function allTimeTotals(uid: number) {
   const [r] = await db
     .select({
       income: sql<string>`coalesce(sum(case when ${transactions.type}='ingreso' then ${transactions.amount} end),0)`,
       expense: sql<string>`coalesce(sum(case when ${transactions.type}='gasto' then ${transactions.amount} end),0)`,
     })
-    .from(transactions);
+    .from(transactions)
+    .where(eq(transactions.userId, uid));
   return { income: Number(r.income), expense: Number(r.expense), net: Number(r.income) - Number(r.expense) };
 }
 
-export async function debtsWithBalance() {
-  const list = await db.select().from(debts).orderBy(debts.closed, debts.createdAt);
+export async function debtsWithBalance(uid: number) {
+  const list = await db.select().from(debts).where(eq(debts.userId, uid)).orderBy(debts.closed, debts.createdAt);
   const paid = await db
     .select({ debtId: debtPayments.debtId, paid: sql<string>`sum(${debtPayments.amount})` })
     .from(debtPayments)
+    .where(eq(debtPayments.userId, uid))
     .groupBy(debtPayments.debtId);
   return list.map((d) => {
     const p = Number(paid.find((x) => x.debtId === d.id)?.paid ?? 0);
@@ -77,18 +79,21 @@ export async function debtsWithBalance() {
   });
 }
 
-export async function pendingRecurring(ym: string) {
+export async function pendingRecurring(uid: number, ym: string) {
   const { start, end } = monthRange(ym);
-  const items = await db.select().from(recurring).where(eq(recurring.active, true));
+  const items = await db.select().from(recurring).where(and(eq(recurring.userId, uid), eq(recurring.active, true)));
   const done = await db
     .select({ rid: transactions.recurringId })
     .from(transactions)
-    .where(and(gte(transactions.date, start), lte(transactions.date, end), sql`${transactions.recurringId} is not null`));
+    .where(and(eq(transactions.userId, uid), gte(transactions.date, start), lte(transactions.date, end), sql`${transactions.recurringId} is not null`));
   const set = new Set(done.map((d) => d.rid));
   return items.filter((i) => !set.has(i.id));
 }
 
-export async function distinctAccounts() {
-  const rows = await db.selectDistinct({ a: transactions.account }).from(transactions).where(sql`${transactions.account} <> ''`);
+export async function distinctAccounts(uid: number) {
+  const rows = await db
+    .selectDistinct({ a: transactions.account })
+    .from(transactions)
+    .where(and(eq(transactions.userId, uid), sql`${transactions.account} <> ''`));
   return rows.map((r) => r.a).sort();
 }
