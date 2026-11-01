@@ -4,7 +4,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "Pendientes", template: "%s · Pendientes" },
   description: "Pendientes, calendario, internships, trabajos, clientes y finanzas.",
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: { icon: "/icon.svg", apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "Pendientes", statusBarStyle: "default" },
   robots: { index: false, follow: false },
 };
 
