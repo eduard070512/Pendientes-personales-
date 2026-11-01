@@ -1,55 +1,72 @@
 # Pendientes personales
 
-Marca cada casilla (`[x]`) cuando la termines. Edítalo directo en GitHub con el ícono del lápiz.
+App personal (solo para ti, con inicio de sesión) para organizar:
 
-Los detalles de cada programa, los enlaces y la búsqueda de trabajo remoto están en [internships.md](internships.md).
+| Sección | Qué hace |
+|---|---|
+| **Inicio** | Lo de hoy y atrasado, lo de las próximas 2 semanas y un resumen del dinero del mes. |
+| **Pendientes** | Agregar, editar y completar pendientes con fecha, prioridad y categoría. Cada uno tiene **seguimiento** (bitácora) y un botón **Trabajar con Claude** que abre Claude (web o app en el celular) con todo el contexto del pendiente. |
+| **Calendario** | Vista del mes con todo lo que tiene fecha: pendientes, fechas límite y pasos de internships, seguimientos de trabajos y clientes, pagos fijos y de deudas. Abajo, la agenda día por día (ideal en el celular). |
+| **Internships** | Cada internship con su enlace, fecha límite, estado ("¿en qué voy?") y una lista de **pasos** que marcas conforme avanzas. Botón para cargar el plan 2026–2027. |
+| **Trabajos** | Vacantes posibles, dónde enviaste tu CV, contacto, sueldo, estado e historial de correos/entrevistas, con fecha de próximo seguimiento. |
+| **Clientes** | Prospectos de menús digitales: contacto, teléfono (botón de WhatsApp y llamada), etapa de venta, valor, próximo seguimiento y "¿en qué me quedé?". |
+| **Finanzas** | Ingresos y gastos (fijos, variables y extras), gastos/ingresos fijos que se registran con un clic cada mes, deudas con abonos, **importación de estados de cuenta** (PDF, CSV o texto pegado) y estadísticas: cuánto entra, cuánto sale, cuánto te queda, tasa de ahorro, en qué se te va el dinero y los últimos 12 meses. |
+
+> **Estados de cuenta del 23 al 23:** cada movimiento se guarda con su fecha real, así que un estado del 23 de septiembre al 23 de octubre reparte sus gastos entre septiembre y octubre. Si el PDF no trae el año en cada línea, se deduce del periodo. Subir el mismo estado dos veces no duplica movimientos, y cada importación se puede deshacer.
+
+Hecho con Next.js 16, TypeScript, Tailwind, Drizzle ORM y Postgres en Neon.
 
 ---
 
-## 🔥 Esta semana (1–7 nov 2026)
+## Puesta en marcha (Neon + Vercel)
 
-- [ ] **Aplicar a Microsoft Explore (2.º año)**. La ventana cierra el **7 nov**. Busca el puesto 200042628 en [careers.microsoft.com/students](https://careers.microsoft.com/students)
-- [ ] CV de 1 página en inglés (PDF) con enlaces a GitHub, LinkedIn y las demos
-- [ ] Poner al día LinkedIn: título, "Open to work", en inglés
+### 1. Base de datos en Neon
+1. En [console.neon.tech](https://console.neon.tech) crea un proyecto (región **AWS São Paulo / sa-east-1**).
+2. En **Connect**, copia la cadena de conexión **pooled** (`…-pooler.sa-east-1.aws.neon.tech/…`).
 
-## Noviembre 2026
+### 2. Variables de entorno
+En Vercel → tu proyecto → **Settings → Environment Variables** agrega:
 
-- [ ] Aplicar a **Oracle MDC** (Zapopan): [careers.oracle.com](https://careers.oracle.com)
-- [ ] Aplicar a **Amazon SDE Intern** (GDL/CDMX): [amazon.jobs](https://www.amazon.jobs)
-- [ ] Aplicar a **IBM** (Guadalajara): [ibm.com/careers](https://www.ibm.com/careers)
-- [ ] Aplicar a **Intel** (Guadalajara): [jobs.intel.com](https://jobs.intel.com)
-- [ ] Activar alertas de empleo: Microsoft, Google, Amazon, Oracle
-- [ ] LeetCode: 3–4 problemas por semana (arreglos, hash maps, two pointers, BFS/DFS) + SQL
-- [ ] Crear perfiles en Get on Board, Torre y Revelo (trabajo remoto ≥ 20,000 MXN)
+| Variable | Valor |
+|---|---|
+| `DATABASE_URL` | La cadena de Neon |
+| `APP_USER` | Tu usuario para entrar |
+| `APP_PASSWORD` | Una contraseña larga |
+| `SESSION_SECRET` | 64 caracteres aleatorios (`openssl rand -hex 32`) |
+| `APP_URL` *(opcional)* | La URL de tu app, p. ej. `https://pendientes.vercel.app`, para que el mensaje a Claude incluya el enlace al pendiente |
 
-## Diciembre 2026
+### 3. Deploy
+1. Vercel → **Add New → Project → Import** este repositorio. Framework: Next.js (lo detecta solo).
+2. **Deploy.** Las tablas se crean solas: el build aplica las migraciones de `drizzle/` a Neon.
 
-- [ ] **1–7 dic:** última ventana de Microsoft Explore (si no aplicaste en noviembre)
-- [ ] Elegir 2–3 organizaciones de GSoC con mi stack (TypeScript, Node, Python, IA)
-- [ ] Hacer mis primeras contribuciones open source ("good first issue")
-- [ ] Practicar entrevistas conductuales en inglés (método STAR)
+### 4. En el celular
+Abre la URL y usa **Compartir → Agregar a pantalla de inicio**; se abre como app.
 
-## Enero 2027
+---
 
-- [ ] **Mediados de ene:** aplicar a 2–3 proyectos de [LFX Mentorship](https://mentorship.lfx.linuxfoundation.org)
-- [ ] Seguir contribuyendo a las organizaciones de GSoC
-- [ ] Revisar bootcamps de Mercado Libre y vacantes de Microsoft México
+## Desarrollo local
 
-## Febrero 2027
+```bash
+npm install
+cp .env.example .env.local   # y llena los valores
+npm run db:migrate
+npm run dev
+```
 
-- [ ] **Fin de feb:** revisar la lista de organizaciones de GSoC 2027 y hablar con los mentores
-- [ ] Aplicar a la tanda de verano de [MLH Fellowship](https://fellowship.mlh.io)
-- [ ] Outreachy: solicitud inicial (solo si soy elegible)
+Funciona con Neon o con un Postgres local (`postgresql://postgres@localhost:5432/pp`).
 
-## Marzo 2027
+Si cambias `src/db/schema.ts`, genera la migración con `npm run db:generate` y súbela; el siguiente deploy la aplica.
 
-- [ ] **Enviar 1–3 propuestas de GSoC** en [summerofcode.withgoogle.com](https://summerofcode.withgoogle.com)
+## Estructura
 
-## Abril 2027
+```
+src/
+  app/(app)/        Secciones (pendientes, calendario, internships, trabajos, clientes, finanzas)
+  app/login/        Inicio de sesión
+  db/schema.ts      Tablas
+  lib/              Fechas, sesión, parser de estados de cuenta, categorías, estadísticas
+  proxy.ts          Protege todas las páginas con la sesión
+drizzle/            Migraciones SQL
+```
 
-- [ ] Vigilar la vacante **Google SWE Intern CDMX** (en 2026 solo estuvo abierta del 8 al 20 abr)
-- [ ] Resultados de GSoC (aprox. 30 abr–8 may)
-
-## Agosto 2027
-
-- [ ] Abren los ciclos 2028: Microsoft, Google y Amazon. Volver a aplicar
+El plan de internships original está en [internships.md](internships.md) y la checklist anterior en [PENDIENTES-INTERNSHIPS.md](PENDIENTES-INTERNSHIPS.md).
