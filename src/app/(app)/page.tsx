@@ -9,6 +9,7 @@ import { addDays, fmtDate, monthKey, monthLabel, relDay, todayISO } from "@/lib/
 import { KIND_STYLE, eventsBetween } from "@/lib/events";
 import { monthSummary } from "@/lib/finance";
 import { money } from "@/lib/format";
+import { InstallButton } from "@/components/install-button";
 import { logout } from "../login/actions";
 import { createTask } from "./pendientes/actions";
 
@@ -46,6 +47,9 @@ export default async function Home() {
   return (
     <>
       <div className="mb-5">
+        <div className="mb-3 md:hidden">
+          <InstallButton className="btn-secondary w-full" />
+        </div>
         <h1 className="h1">Hola, Eduardo 👋</h1>
         <p className="muted text-sm">
           Hoy es {fmtDate(today, true)}. {urgent.length ? `Tienes ${urgent.length} pendiente${urgent.length > 1 ? "s" : ""} para hoy o atrasados.` : "Nada urgente para hoy."}
@@ -147,9 +151,11 @@ export default async function Home() {
         <Stat label="Te queda" value={money(fin.net)} tone={fin.net >= 0 ? "good" : "bad"} />
       </div>
 
-      <form action={logout} className="md:hidden">
-        <button className="btn-secondary w-full">Cerrar sesión</button>
-      </form>
+      <div className="md:hidden">
+        <form action={logout}>
+          <button className="btn-secondary w-full">Cerrar sesión</button>
+        </form>
+      </div>
     </>
   );
 }

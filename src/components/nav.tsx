@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { InstallButton } from "./install-button";
 
 export const NAV = [
   { href: "/", label: "Inicio", icon: "🏠" },
@@ -39,9 +40,12 @@ export function Sidebar({ logout }: { logout: () => Promise<void> }) {
           </Link>
         ))}
       </nav>
-      <form action={logout}>
-        <button className="btn-secondary w-full">Cerrar sesión</button>
-      </form>
+      <div className="space-y-2">
+        <InstallButton className="btn-primary w-full" />
+        <form action={logout}>
+          <button className="btn-secondary w-full">Cerrar sesión</button>
+        </form>
+      </div>
     </aside>
   );
 }
