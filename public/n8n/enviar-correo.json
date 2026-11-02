@@ -1,0 +1,36 @@
+{
+  "name": "Pendientes · Enviar correo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pendientes-correo",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Webhook de la app",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "pendientes-correo"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.body.to }}",
+        "subject": "={{ $json.body.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.body.html }}",
+        "options": { "senderName": "Pendientes", "appendAttribution": false }
+      },
+      "name": "Enviar con Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [260, 0]
+    }
+  ],
+  "connections": {
+    "Webhook de la app": { "main": [[{ "node": "Enviar con Gmail", "type": "main", "index": 0 }]] }
+  },
+  "settings": {}
+}

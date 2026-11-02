@@ -34,17 +34,27 @@ En Vercel → tu proyecto → **Settings → Environment Variables** agrega:
 | `DATABASE_URL` | La cadena de Neon |
 | `SESSION_SECRET` | 64 caracteres aleatorios (`openssl rand -hex 32`) |
 | `APP_URL` | La URL de tu app, p. ej. `https://pendientes.vercel.app` (para los enlaces de los correos) |
-| `RESEND_API_KEY` / `EMAIL_FROM` | Para mandar el correo de "olvidé mi contraseña" (ver abajo) |
+| `N8N_EMAIL_WEBHOOK_URL` / `N8N_EMAIL_SECRET` | Para mandar el correo de "olvidé mi contraseña" con n8n + Gmail (ver abajo) |
+| `RESEND_API_KEY` / `EMAIL_FROM` *(alternativa)* | Lo mismo pero con Resend; si está, tiene prioridad sobre n8n |
 | `OWNER_EMAIL` *(opcional)* | Si ya usabas la app antes de las cuentas: tus datos viejos pasan a quien se registre con este correo |
 | `CRON_SECRET` | Secreto del cron diario de Classroom (`openssl rand -hex 32`) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` *(opcional)* | Para conectar Classroom (ver paso 4) |
 
-### Correos para recuperar contraseña (Resend)
+### Correos para recuperar contraseña con n8n (recomendado para empezar)
+1. Inventa el secreto: abre https://generate-secret.vercel.app/32 y copia el texto.
+2. En n8n: **Workflows → Import from file** y elige `public/n8n/enviar-correo.json`.
+3. Abre el nodo **Webhook de la app → Credential for Header Auth → Create new**: en *Name* escribe `x-pendientes-secret` y en *Value* pega el secreto. Guarda.
+4. Abre el nodo **Enviar con Gmail** y elige (o crea) tu credencial de Gmail.
+5. **Activa** el workflow (interruptor arriba a la derecha). Vuelve al nodo Webhook, pestaña **Production URL**, y copia la URL (`https://tu-n8n…/webhook/pendientes-correo`).
+6. En Vercel agrega `N8N_EMAIL_WEBHOOK_URL` (esa URL) y `N8N_EMAIL_SECRET` (el mismo secreto) y vuelve a hacer deploy.
+7. Prueba: en la app, **¿Olvidaste tu contraseña?** con tu correo.
+
+### Alternativa: Resend (cuando tengas dominio propio)
 1. Crea una cuenta gratis en [resend.com](https://resend.com) (3,000 correos al mes).
 2. **Domains → Add domain** y agrega los registros DNS que te da (si no tienes dominio, mientras tanto solo puedes enviarte correos a ti mismo con `onboarding@resend.dev`).
 3. **API Keys → Create** y pégala en `RESEND_API_KEY`. En `EMAIL_FROM` pon algo como `Pendientes <no-reply@tudominio.com>`.
 
-Si no lo configuras, la app funciona igual, pero el enlace para restablecer la contraseña solo aparece en los logs de Vercel.
+Si no configuras ni n8n ni Resend, la app funciona igual, pero el enlace para restablecer la contraseña solo aparece en los logs de Vercel.
 
 ### 3. Deploy
 1. Vercel → **Add New → Project → Import** este repositorio. Framework: Next.js (lo detecta solo).
