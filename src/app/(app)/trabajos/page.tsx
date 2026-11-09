@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { jobs } from "@/db/schema";
 import { SubmitButton } from "@/components/client";
 import { JobFields } from "@/components/job-fields";
+import { JobSources } from "@/components/job-sources";
 import { Badge, Empty, PageHeader, Tabs } from "@/components/ui";
 import { requireUid } from "@/lib/auth";
 import { JOB_STATUS, opt } from "@/lib/constants";
@@ -35,6 +36,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           <SubmitButton>Agregar</SubmitButton>
         </form>
       </details>
+
+      <JobSources open={total === 0} />
 
       <Tabs
         active={estado}
